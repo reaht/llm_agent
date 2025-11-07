@@ -33,26 +33,26 @@ async def reasoning_loop(agent, sensors):
     cycle = 1
     while True:
 
-        # --- Wait for valid input from WebSocket client ---
-        while True:
-            print("[Main] Awaiting client input: send 'continue' to proceed or 'exit' to stop.\n")
-            await output_queue.put(
-                "Awaiting client input: send 'continue' to proceed or 'exit' to stop."
-            )
-            msg = await input_queue.get()
-            msg_lower = msg.strip().lower()
+        # # --- Wait for valid input from WebSocket client ---
+        # while True:
+        #     print("[Main] Awaiting client input: send 'continue' to proceed or 'exit' to stop.\n")
+        #     await output_queue.put(
+        #         "Awaiting client input: send 'continue' to proceed or 'exit' to stop."
+        #     )
+        #     msg = await input_queue.get()
+        #     msg_lower = msg.strip().lower()
 
-            if msg_lower in ["continue", "c"]:
-                print("[Main] Continuing to next cycle...\n")
-                cycle += 1
-                break
-            elif msg_lower in ["exit", "stop", "quit"]:
-                print("[Main] Exiting on client request.")
-                return
-            else:
-                await output_queue.put(
-                    f"[Main] Unrecognized command: {msg}. Type 'continue' or 'exit'."
-                )
+        #     if msg_lower in ["continue", "c"]:
+        #         print("[Main] Continuing to next cycle...\n")
+        #         cycle += 1
+        #         break
+        #     elif msg_lower in ["exit", "stop", "quit"]:
+        #         print("[Main] Exiting on client request.")
+        #         return
+        #     else:
+        #         await output_queue.put(
+        #             f"[Main] Unrecognized command: {msg}. Type 'continue' or 'exit'."
+        #         )
 
         # --- Read current sensor data snapshot ---
         sensor_data = {s.name: s.read() for s in sensors}
