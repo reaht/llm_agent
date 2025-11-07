@@ -24,24 +24,19 @@ async def websocket_server():
 #  Reasoning Loop (client-controlled)
 # ---------------------------------------------------------------------
 async def reasoning_loop(agent, sensors):
-    """
-    Perform reasoning cycles controlled by client input.
-    After each cycle, wait for 'continue' or 'exit' from client.
-    """
+    """Perform reasoning cycles controlled by client input."""
     if agent.logger.output_queue:
         print("[DEBUG] Logger connected to WebSocket output queue.")
     else:
         print("[DEBUG] Logger missing output queue!")
 
-
     cycle = 1
     while True:
-
-
         print("[Main] Awaiting client input: send 'continue' to proceed or 'exit' to stop.\n")
-        await output_queue.put(  # just a control message
+        await output_queue.put(
             "Awaiting client input: send 'continue' to proceed or 'exit' to stop."
         )
+
         # --- Wait for valid input from WebSocket client ---
         while True:
             msg = await input_queue.get()
@@ -70,17 +65,39 @@ async def reasoning_loop(agent, sensors):
         print(f"[Main] Reasoning cycle {cycle} complete.")
 
 
-
 # ---------------------------------------------------------------------
 #  Sensor Loop (runs silently in background)
 # ---------------------------------------------------------------------
 async def sensor_loop(agent, sensors):
-    """Continuously push sensor data snapshots to summarizer."""
+    """Continuously push sensor data snapshots to summarizer (≈2 Hz)."""
     while True:
         data = {s.name: s.read() for s in sensors}
-        # no logging here — summarizer handles this quietly
         await agent.summarizer.push_data(data)
         await asyncio.sleep(0.5)
+
+
+# ---------------------------------------------------------------------
+#  NEW: Summarization Loop
+# ---------------------------------------------------------------------
+async def summarization_loop(agent):
+    """
+    Periodically checks for new data and triggers summarization
+    if no other summarization is running.
+    """
+    llm_lock = asyncio.Lock()
+    print("[Main] Summarization loop started.")
+
+    while True:
+        await asyncio.sleep(1.0)  # ≈1 Hz summarization check
+        if agent.summarizer.queue.empty():
+            continue
+        if llm_lock.locked():
+            continue
+
+        async with llm_lock:
+            print("[Main] Starting summarization pass...")
+            await agent.summarizer.summarize_batch()
+            print("[Main] Summarization pass complete.")
 
 
 # ---------------------------------------------------------------------
@@ -101,8 +118,9 @@ async def main():
     transport, protocol = await create_dispatcher("COM4", 9600, handlers)
     print("[Main] Serial dispatcher started for sensors on COM4.")
 
+    # --- Initialize reasoning agent ---
     agent = ReasoningAgent()
-    agent.logger = BroadcastLogger(output_queue)  # ✅ link to WebSocket output
+    agent.logger = BroadcastLogger(output_queue)
     await agent.start()
     print("[Main] ReasoningAgent will send its output to connected clients only.")
 
@@ -112,8 +130,9 @@ async def main():
     # --- Run everything concurrently ---
     await asyncio.gather(
         websocket_server(),                # client connection handler
-        reasoning_loop(agent, sensors),    # LLM reasoning (client-visible)
-        sensor_loop(agent, sensors),       # silent background data stream
+        reasoning_loop(agent, sensors),    # client-controlled reasoning loop
+        sensor_loop(agent, sensors),       # sensor data producer (~2 Hz)
+        summarization_loop(agent),         # 🔥 new summarization scheduler (~1 Hz)
     )
 
     # --- Cleanup ---

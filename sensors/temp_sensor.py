@@ -38,6 +38,6 @@ class TempSensor(BaseSensor):
     # ------------------------------------------------------------------
     def read(self):
         return {
-            "temperature": self.last_temp,
-            "humidity": self.last_hum
+            "temperature (c)": self.last_temp,
+            "humidity (%)": self.last_hum
         }

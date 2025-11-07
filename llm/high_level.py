@@ -21,44 +21,45 @@ class ReasoningAgent:
             "Your job is to reason logically.\n"
         )
 
-        # Logger placeholder — set in main.py
+        # Logger placeholder — set externally (e.g., in main.py)
         self.logger = None
-        self.summarizer_task = None
 
     # -----------------------------------------------------------
-    # Async initializer (start background summarizer)
+    # Async initializer (external summarizer control)
     # -----------------------------------------------------------
     async def start(self):
-        self.summarizer_task = asyncio.create_task(self.summarizer.run())
+        """
+        Initializes the reasoning agent.
+        The summarizer is now managed externally by main.py's summarization_loop().
+        """
         if self.logger:
-            await self.logger.aprint("[ReasoningAgent] Summarizer background task started.")
+            await self.logger.aprint(
+                "[ReasoningAgent] Ready (external summarization loop in main.py)."
+            )
         else:
-            print("[ReasoningAgent] Summarizer background task started.")
+            print("[ReasoningAgent] Ready (external summarization loop in main.py).")
         return self
 
     async def stop(self):
+        """Graceful stop for summarizer (if needed)."""
         self.summarizer.stop()
-        if hasattr(self, "summarizer_task"):
-            await asyncio.sleep(0.2)
 
     # -----------------------------------------------------------
     # Reasoning cycle
     # -----------------------------------------------------------
     async def step(self, sensor_data: dict):
         """Perform one reasoning cycle."""
-
-        # Push new data to summarizer first
+        # Push new sensor data into summarizer queue
         await self.summarizer.push_data(sensor_data)
 
-        # Then get most recent summary
+        # Retrieve latest summary (updated by external summarization loop)
         short_context = await self.summarizer.get_summary()
-
         await self._log(f"[Agent] Summarizer output: {short_context}")
 
-        # Retrieve related memories
+        # Retrieve relevant memories
         memories = self.memory.retrieve_from_keywords(short_context)
 
-        # Build complete reasoning context
+        # Build full reasoning context
         full_context = self.context_builder.compose(
             initial=self.initial_prompt,
             memory=memories,
@@ -69,12 +70,12 @@ class ReasoningAgent:
         await self._log("\n[Agent] Full Context:\n" + full_context)
         await self._log("\n[Agent] Reasoning Output:\n")
 
-        # Query LLM for reasoning output
+        # Query reasoning LLM asynchronously
         reasoning = await self.query_llm(full_context)
 
         await self._log("\n[Agent] Finished Reasoning Output\n")
 
-        # Update memory and execute bridge actions
+        # Store reasoning in memory and forward actions to bridge
         self.memory.add_fragment(reasoning, short_context)
         self.bridge.process_reasoning(reasoning)
 
@@ -102,7 +103,7 @@ class ReasoningAgent:
                             token = data.get("response", "")
                             if token:
                                 output += token
-                                await self._log(token, end="")  # stream live to client
+                                await self._log(token, end="")  # live-stream tokens to client
                         except json.JSONDecodeError:
                             continue
         except Exception as e:

@@ -35,9 +35,9 @@ class DistanceSensor(BaseSensor):
         """
         self._lock = True
         result = {
-            "current": self._current,
-            "min": self._min,
-            "max": self._max,
+            "curr (cm)": self._current,
+            "min (cm)": self._min,
+            "max (cm)": self._max,
         }
         # Reset min/max for next window
         self._min = self._current
