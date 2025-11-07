@@ -1,0 +1,5 @@
+ollama_model: phi3
+loop_interval: 3
+memory_db: data/memories.db
+embedding_dim: 384
+vector_index: data/faiss.index
