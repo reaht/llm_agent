@@ -1,29 +1,40 @@
 # web/server.py
-import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import asyncio
 
 app = FastAPI()
-input_queue = asyncio.Queue()   # messages from client → main
-output_queue = asyncio.Queue()  # messages from main → client
+
+input_queue = asyncio.Queue()
+output_queue = asyncio.Queue()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("[WebSocket] Client connected.")
 
-    # background task: send updates to client
-    async def send_updates():
-        while True:
-            msg = await output_queue.get()
-            await websocket.send_text(msg)
+    async def sender():
+        try:
+            while True:
+                msg = await output_queue.get()
+                await websocket.send_text(msg)
+        except WebSocketDisconnect:
+            print("[WebSocket] Client disconnected during send.")
+        except Exception as e:
+            print(f"[WebSocket] Sender error: {e}")
 
-    send_task = asyncio.create_task(send_updates())
+    async def receiver():
+        try:
+            while True:
+                msg = await websocket.receive_text()
+                await input_queue.put(msg)
+        except WebSocketDisconnect:
+            print("[WebSocket] Client disconnected during receive.")
+        except Exception as e:
+            print(f"[WebSocket] Receiver error: {e}")
 
     try:
-        while True:
-            data = await websocket.receive_text()
-            print(f"[WebSocket] Received: {data}")
-            await input_queue.put(data)
+        await asyncio.gather(sender(), receiver())
     except WebSocketDisconnect:
-        send_task.cancel()
-        print("[WebSocket] Client disconnected.")
+        print("[WebSocket] Client disconnected (main).")
+    finally:
+        print("[WebSocket] Connection closed cleanly.")

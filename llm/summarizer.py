@@ -10,7 +10,7 @@ class Summarizer:
       - exposes latest summary text for use by other agents
     """
 
-    def __init__(self, model="phi3"):
+    def __init__(self, model="phi3:mini"):
         self.model = model
         self.queue = asyncio.Queue()
         self.latest_summary = "No summary yet."
@@ -82,7 +82,15 @@ class Summarizer:
     # ------------------------------------------------------------------
     def _query_ollama(self, prompt, timeout_s=10.0):
         url = "http://localhost:11434/api/generate"
-        payload = {"model": self.model, "prompt": prompt, "stream": False}
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": "30m",
+            "options": {"temperature": 0.2, "num_ctx": 512}
+        }
+        
+        # payload = {"model": self.model, "prompt": prompt, "stream": False}
         try:
             r = requests.post(url, json=payload, timeout=timeout_s)
             if r.status_code != 200:
