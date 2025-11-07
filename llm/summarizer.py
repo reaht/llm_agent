@@ -1,7 +1,7 @@
 import asyncio
 import aiohttp
 from utils.data_formatter import format_sensor_batch
-
+from utils.llm_lock import global_llm_lock
 
 class Summarizer:
     """
@@ -93,14 +93,15 @@ class Summarizer:
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload, timeout=timeout_s) as resp:
-                    if resp.status != 200:
-                        text = await resp.text()
-                        print(f"[Summarizer] HTTP {resp.status}: {text}")
-                        return ""
-                    data = await resp.json()
-                    return data.get("response", "")
+            async with global_llm_lock:  # ⬅ only one LLM call at a time
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, json=payload, timeout=timeout_s) as resp:
+                        if resp.status != 200:
+                            text = await resp.text()
+                            print(f"[Summarizer] HTTP {resp.status}: {text}")
+                            return ""
+                        data = await resp.json()
+                        return data.get("response", "")
         except asyncio.TimeoutError:
             print("[Summarizer] LLM request timed out.")
         except aiohttp.ClientError as e:

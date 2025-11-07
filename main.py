@@ -32,13 +32,13 @@ async def reasoning_loop(agent, sensors):
 
     cycle = 1
     while True:
-        print("[Main] Awaiting client input: send 'continue' to proceed or 'exit' to stop.\n")
-        await output_queue.put(
-            "Awaiting client input: send 'continue' to proceed or 'exit' to stop."
-        )
 
         # --- Wait for valid input from WebSocket client ---
         while True:
+            print("[Main] Awaiting client input: send 'continue' to proceed or 'exit' to stop.\n")
+            await output_queue.put(
+                "Awaiting client input: send 'continue' to proceed or 'exit' to stop."
+            )
             msg = await input_queue.get()
             msg_lower = msg.strip().lower()
 
@@ -126,18 +126,20 @@ async def main():
 
     # --- Start WebSocket server ---
     print("[Main] Starting WebSocket server on ws://localhost:8000/ws")
-
+    memory_task = asyncio.create_task(agent.memory_manager.run())
     # --- Run everything concurrently ---
     await asyncio.gather(
         websocket_server(),                # client connection handler
         reasoning_loop(agent, sensors),    # client-controlled reasoning loop
         sensor_loop(agent, sensors),       # sensor data producer (~2 Hz)
         summarization_loop(agent),         # 🔥 new summarization scheduler (~1 Hz)
+        memory_task
     )
 
     # --- Cleanup ---
     transport.close()
     agent.summarizer.stop()
+    agent.memory_manager.stop()
     print("[Main] All tasks stopped. Serial closed.")
 
 

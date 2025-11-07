@@ -20,6 +20,6 @@ class ContextBuilder:
             f"=== REASONING ===\n"
             "[Provide reasoning regarding your current task in the form of a summary. Use the data available to you. "
             "Keep your summary short, you don't have much time. Don't include grammer and use small words, use as little characters as possible. "
-            "Don't provide explanations. Don't extrapolate, use only the information you have given to come to a conclusion. End when completed.]\n"
+            "Don't provide explanations. Don't extrapolate, use only the information you have given to come to a conclusion. End when completed, don't follow up with another section.]\n"
             # "Example reasoning: I am in a room and am trying to leave. Based on the distance of 15cm, I am close to the door. I must move forward to leave.\n"
         )

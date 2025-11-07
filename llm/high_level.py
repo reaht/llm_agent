@@ -7,11 +7,15 @@ from utils.context_builder import ContextBuilder
 from memory.vector_store import MemoryStore
 from llm.summarizer import Summarizer
 from llm.bridge import Bridge
+from utils.llm_lock import global_llm_lock
+from memory.memory_manager import MemoryManager
+from memory.vector_store import MemoryStore
 
 
 class ReasoningAgent:
     def __init__(self):
-        self.memory = MemoryStore()
+        self.memory_store = MemoryStore()
+        self.memory_manager = MemoryManager(self.memory_store)
         self.summarizer = Summarizer()
         self.bridge = Bridge()
         self.context_builder = ContextBuilder()
@@ -57,7 +61,7 @@ class ReasoningAgent:
         await self._log(f"[Agent] Summarizer output: {short_context}")
 
         # Retrieve relevant memories
-        memories = self.memory.retrieve_from_keywords(short_context)
+        memories = await self.memory_store.retrieve_from_keywords(short_context)
 
         # Build full reasoning context
         full_context = self.context_builder.compose(
@@ -66,24 +70,25 @@ class ReasoningAgent:
             short_term=short_context,
             sensors=sensor_data,
         )
+        await self._log(f"[payload size: ] + {len(full_context)}")
 
         await self._log("\n[Agent] Full Context:\n" + full_context)
         await self._log("\n[Agent] Reasoning Output:\n")
 
         # Query reasoning LLM asynchronously
-        reasoning = await self.query_llm(full_context)
+        #reasoning = await self.query_llm(full_context)
+        reasoning = await self.query_llm(full_context, model="phi3", timeout_s=30.0)
 
         await self._log("\n[Agent] Finished Reasoning Output\n")
 
         # Store reasoning in memory and forward actions to bridge
-        self.memory.add_fragment(reasoning, short_context)
+        await self.memory_manager.push_memory(reasoning, short_context)
         self.bridge.process_reasoning(reasoning)
 
     # -----------------------------------------------------------
     # Asynchronous LLM query (streaming)
     # -----------------------------------------------------------
     async def query_llm(self, prompt: str, model="phi3", timeout_s: float = 8.0):
-        """Query local Ollama model asynchronously using aiohttp (streamed)."""
         url = "http://localhost:11434/api/generate"
         payload = {"model": model, "prompt": prompt, "stream": True}
 
@@ -91,21 +96,22 @@ class ReasoningAgent:
         start_time = time.time()
 
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout_s + 2)) as session:
-                async with session.post(url, json=payload) as resp:
-                    async for line in resp.content:
-                        if time.time() - start_time > timeout_s:
-                            break
-                        if not line.strip():
-                            continue
-                        try:
-                            data = json.loads(line.decode())
-                            token = data.get("response", "")
-                            if token:
-                                output += token
-                                await self._log(token, end="")  # live-stream tokens to client
-                        except json.JSONDecodeError:
-                            continue
+            async with global_llm_lock:  # ⬅ same global lock
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout_s + 2)) as session:
+                    async with session.post(url, json=payload) as resp:
+                        async for line in resp.content:
+                            if time.time() - start_time > timeout_s:
+                                break
+                            if not line.strip():
+                                continue
+                            try:
+                                data = json.loads(line.decode())
+                                token = data.get("response", "")
+                                if token:
+                                    output += token
+                                    await self._log(token, end="")
+                            except json.JSONDecodeError:
+                                continue
         except Exception as e:
             await self._log(f"[Agent] LLM query failed: {e}")
 

@@ -12,21 +12,22 @@ async def main():
         print("Type 'continue' or 'exit' when prompted.\n")
 
         async def listen():
+            # ✅ Just print the raw text, no prefix, no extra newlines
             async for msg in ws:
-                print(f"[Robot → Client] {msg}")
+                print(msg, end="")
 
         listener_task = asyncio.create_task(listen())
 
         try:
             while True:
-                msg = await async_input("You: ")  # ✅ non-blocking input
+                msg = await async_input("")  # keep prompt minimal
                 msg = msg.strip()
                 await ws.send(msg)
                 if msg.lower() == "exit":
                     break
         finally:
             listener_task.cancel()
-            print("[Client] Disconnected.")
+            print("\n[Client] Disconnected.")
 
 if __name__ == "__main__":
     asyncio.run(main())
